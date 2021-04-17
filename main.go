@@ -119,6 +119,14 @@ func main() {
 	curYear := time.Now()
 
 	for i, file := range backupFiles {
+		if numRecent == keepRecent &&
+			numDays == keepDaily &&
+			numWeeks == keepWeekly &&
+			numMonths == keepMonthly &&
+			numYears == keepYearly {
+			// We're done. Don't need to check any more files.
+			break
+		}
 
 		// Check recent files
 		if numRecent < keepRecent {
