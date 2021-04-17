@@ -22,7 +22,7 @@ var (
 	backupDir   string
 )
 
-type BackupFile struct {
+type backupFile struct {
 	name    string
 	modTime time.Time
 	keep    bool
@@ -77,9 +77,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var backupFiles []BackupFile
+	var backupFiles []backupFile
 	for _, file := range files {
-		backupFiles = append(backupFiles, BackupFile{
+		backupFiles = append(backupFiles, backupFile{
 			name:    file.Name(),
 			modTime: file.ModTime(),
 			keep:    false,
