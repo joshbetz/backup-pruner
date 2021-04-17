@@ -18,6 +18,7 @@ var (
 	keepMonthly int
 	keepYearly  int
 	dryRunFlag  bool
+	helpFlag    bool
 	backupDir   string
 )
 
@@ -39,8 +40,14 @@ func init() {
 	flag.IntVar(&keepMonthly, "keep-monthly", 0, "Monthly backups to keep. Default is 0")
 	flag.IntVar(&keepYearly, "keep-yearly", 0, "Yearly backups to keep. Default is 0")
 	flag.BoolVar(&dryRunFlag, "dry-run", false, "Dry run mode")
+	flag.BoolVar(&helpFlag, "h", false, "Help")
 
 	flag.Parse()
+
+	if helpFlag {
+		usage()
+		os.Exit(0)
+	}
 
 	if flag.NArg() < 1 {
 		usage()
