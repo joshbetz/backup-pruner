@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/fatih/color"
 )
 
 var (
@@ -17,9 +19,13 @@ var (
 	keepWeekly  int
 	keepMonthly int
 	keepYearly  int
-	dryRunFlag  bool
-	helpFlag    bool
-	backupDir   string
+
+	dryRunFlag     bool
+	verboseOneFlag bool
+	verboseTwoFlag bool
+	helpFlag       bool
+
+	backupDir string
 )
 
 type backupFile struct {
@@ -39,10 +45,17 @@ func init() {
 	flag.IntVar(&keepWeekly, "keep-weekly", 0, "Weekly backups to keep. Default is 0")
 	flag.IntVar(&keepMonthly, "keep-monthly", 0, "Monthly backups to keep. Default is 0")
 	flag.IntVar(&keepYearly, "keep-yearly", 0, "Yearly backups to keep. Default is 0")
+
 	flag.BoolVar(&dryRunFlag, "dry-run", false, "Dry run mode")
+	flag.BoolVar(&verboseOneFlag, "v", false, "Verbose")
+	flag.BoolVar(&verboseTwoFlag, "vv", false, "Verbose")
 	flag.BoolVar(&helpFlag, "h", false, "Help")
 
 	flag.Parse()
+
+	if verboseTwoFlag {
+		verboseOneFlag = true
+	}
 
 	if helpFlag {
 		usage()
@@ -152,9 +165,17 @@ func main() {
 
 	for _, file := range backupFiles {
 		if file.keep {
-			fmt.Println(file.name, file.modTime)
-		} else if !dryRunFlag {
-			os.Remove(backupDir + "/" + file.name)
+			if verboseOneFlag || dryRunFlag {
+				fmt.Println(color.BlueString("[Keeping]"), file.name, file.modTime)
+			}
+		} else {
+			if verboseTwoFlag {
+				fmt.Println(color.RedString("[Deleting]"), file.name, file.modTime)
+			}
+
+			if !dryRunFlag {
+				os.Remove(backupDir + "/" + file.name)
+			}
 		}
 	}
 }
