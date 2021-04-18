@@ -28,12 +28,6 @@ var (
 	backupDir string
 )
 
-type backupFile struct {
-	name    string
-	modTime time.Time
-	keep    bool
-}
-
 func usage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s <dir>\n", os.Args[0])
 	flag.PrintDefaults()
@@ -90,17 +84,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var backupFiles []backupFile
-	for _, file := range files {
-		backupFiles = append(backupFiles, backupFile{
-			name:    file.Name(),
-			modTime: file.ModTime(),
-			keep:    false,
-		})
-	}
-
-	sort.Slice(backupFiles, func(i, j int) bool {
-		return backupFiles[i].modTime.After(backupFiles[j].modTime)
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime().After(files[j].ModTime())
 	})
 
 	// Process files
@@ -118,71 +103,62 @@ func main() {
 	numYears := 0
 	curYear := time.Now()
 
-	for i, file := range backupFiles {
-		if numRecent == keepRecent &&
-			numDays == keepDaily &&
-			numWeeks == keepWeekly &&
-			numMonths == keepMonthly &&
-			numYears == keepYearly {
-			// We're done. Don't need to check any more files.
-			break
-		}
+	if dryRunFlag {
+		fmt.Println("Dry run mode. Not deleting any files.")
+	}
+
+	for _, file := range files {
+		keep := false
 
 		// Check recent files
 		if numRecent < keepRecent {
-			backupFiles[i].keep = true
+			keep = true
 			numRecent++
 		}
 
 		// Check days
-		if numDays < keepDaily && file.modTime.Before(curDay) {
-			backupFiles[i].keep = true
+		if numDays < keepDaily && file.ModTime().Before(curDay) {
+			keep = true
 
 			numDays++
 			curDay = curDay.AddDate(0, 0, -1)
 		}
 
 		// Check weeks
-		if numWeeks < keepWeekly && file.modTime.Before(curWeek) {
-			backupFiles[i].keep = true
+		if numWeeks < keepWeekly && file.ModTime().Before(curWeek) {
+			keep = true
 
 			numWeeks++
 			curWeek = curWeek.AddDate(0, 0, -7)
 		}
 
 		// Check months
-		if numMonths < keepMonthly && file.modTime.Before(curMonth) {
-			backupFiles[i].keep = true
+		if numMonths < keepMonthly && file.ModTime().Before(curMonth) {
+			keep = true
 
 			numMonths++
 			curMonth = curMonth.AddDate(0, -1, 0)
 		}
 
 		// Check years
-		if numYears < keepYearly && file.modTime.Before(curYear) {
-			backupFiles[i].keep = true
+		if numYears < keepYearly && file.ModTime().Before(curYear) {
+			keep = true
 
 			numYears++
 			curYear = curYear.AddDate(-1, 0, 0)
 		}
-	}
 
-	if dryRunFlag {
-		fmt.Println("Dry run mode. Not deleting any files.")
-	}
-
-	for _, file := range backupFiles {
-		if file.keep {
+		if keep {
 			if verboseOneFlag || dryRunFlag {
-				fmt.Println(color.BlueString("[Keeping]"), file.name, file.modTime)
+				fmt.Println("[", color.BlueString("Keeping"), " ]", file.Name(), file.ModTime())
 			}
 		} else {
 			if verboseTwoFlag {
-				fmt.Println(color.RedString("[Deleting]"), file.name, file.modTime)
+				fmt.Println("[", color.RedString("Deleting"), "]", file.Name(), file.ModTime())
 			}
 
 			if !dryRunFlag {
-				os.Remove(backupDir + "/" + file.name)
+				os.Remove(backupDir + "/" + file.Name())
 			}
 		}
 	}
