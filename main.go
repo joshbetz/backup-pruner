@@ -148,7 +148,7 @@ func keep(candidates []*backup, max int, compare func(*backup) string) {
 			continue
 		}
 
-		key := "recent"
+		key := backup.file.Name()
 		if compare != nil {
 			key = compare(backup)
 		}
