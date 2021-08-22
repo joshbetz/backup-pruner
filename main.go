@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"time"
 
 	"github.com/fatih/color"
 )
@@ -28,6 +27,11 @@ var (
 
 	backupDir string
 )
+
+type backup struct {
+	file fs.FileInfo
+	keep bool
+}
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s <dir>\n", os.Args[0])
@@ -70,6 +74,11 @@ func init() {
 		os.Exit(1)
 	}
 
+	if keepRecent < 3 {
+		// Keep at least 3 just to be safe
+		keepRecent = 3
+	}
+
 	var err error
 	backupDir = flag.Arg(0)
 	backupDir, err = filepath.Abs(backupDir)
@@ -89,100 +98,89 @@ func main() {
 		return files[i].ModTime().After(files[j].ModTime())
 	})
 
-	// Process files
-	curDate := time.Now()
-	numRecent := 0
-	numDays := 0
-	numWeeks := 0
-	numMonths := 0
-	numYears := 0
-
 	if dryRunFlag {
 		fmt.Println("Dry run mode. Not deleting any files.")
 	}
 
+	// Initialize backups
+	candidates := make([]*backup, 0, len(files))
 	for _, file := range files {
+		candidates = append(candidates, &backup{
+			file: file,
+		})
+	}
 
-		// Check recent files
-		if numRecent < keepRecent {
-			numRecent++
-			curDate = file.ModTime()
+	// Mark backups to keep
+	keep(candidates, keepRecent, nil)
+	keep(candidates, keepDaily, func(backup *backup) string {
+		return backup.file.ModTime().Format("2006-01-02")
+	})
+	keep(candidates, keepWeekly, func(backup *backup) string {
+		yy, ww := backup.file.ModTime().ISOWeek()
+		return fmt.Sprintf("%04d-%02d", yy, ww)
+	})
+	keep(candidates, keepMonthly, func(backup *backup) string {
+		return backup.file.ModTime().Format("2006-01")
+	})
+	keep(candidates, keepYearly, func(backup *backup) string {
+		return backup.file.ModTime().Format("2006")
+	})
 
-			printKeeping(file, color.RedString("(Recent) "))
-			continue
-		}
-
-		// Check days
-		if numDays < keepDaily {
-			if file.ModTime().Before(curDate.AddDate(0, 0, -1)) {
-				numDays++
-				curDate = file.ModTime()
-
-				printKeeping(file, color.YellowString("(Daily)  "))
-				continue
-			}
-
-			deleteFile(file)
-			continue
-		}
-
-		// Check weeks
-		if numWeeks < keepWeekly {
-			if file.ModTime().Before(curDate.AddDate(0, 0, -7)) {
-				numWeeks++
-				curDate = file.ModTime()
-
-				printKeeping(file, color.CyanString("(Weekly) "))
-				continue
-			}
-
-			deleteFile(file)
-			continue
-		}
-
-		// Check months
-		if numMonths < keepMonthly {
-			if file.ModTime().Before(curDate.AddDate(0, -1, 0)) {
-				numMonths++
-				curDate = file.ModTime()
-
-				printKeeping(file, color.BlueString("(Monthly)"))
-				continue
-			}
-
-			deleteFile(file)
-			continue
-		}
-
-		// Check years
-		if numYears < keepYearly {
-			if file.ModTime().Before(curDate.AddDate(-1, 0, 0)) {
-				numYears++
-				curDate = file.ModTime()
-
-				printKeeping(file, color.MagentaString("(Yearly) "))
-				continue
-			}
-
-			deleteFile(file)
-			continue
+	// Process all backups
+	for _, backup := range candidates {
+		if backup.keep {
+			fmt.Println("[", color.BlueString("Keeping"), " ]", backup.file.Name(), backup.file.ModTime())
+		} else if !dryRunFlag {
+			fmt.Println("[", color.RedString("Removing"), " ]", backup.file.Name(), backup.file.ModTime())
+			os.Remove(backupDir + "/" + backup.file.Name())
 		}
 	}
 }
 
-func printKeeping(file fs.FileInfo, detail string) {
-	if verboseOneFlag || dryRunFlag {
-		fmt.Println("[", "Keeping", detail, "]", file.Name(), file.ModTime())
-	}
-}
-
-func deleteFile(file fs.FileInfo) {
-	// Delete
-	if verboseTwoFlag {
-		fmt.Println("[", color.RedString("Deleting         "), "]", file.Name(), file.ModTime())
+func keep(candidates []*backup, max int, compare func(*backup) string) {
+	if max < 1 {
+		return
 	}
 
-	if !dryRunFlag {
-		os.Remove(backupDir + "/" + file.Name())
+	grouped := make(map[string]*backup, max*2)
+	for _, backup := range candidates {
+		if backup.keep {
+			continue
+		}
+
+		key := "recent"
+		if compare != nil {
+			key = compare(backup)
+		}
+
+		previous := grouped[key]
+		if previous == nil || previous.file.ModTime().Before(backup.file.ModTime()) {
+			grouped[key] = backup
+		}
+	}
+
+	finalCandidates := make([]*backup, 0, len(grouped))
+	for _, backup := range grouped {
+		finalCandidates = append(finalCandidates, backup)
+	}
+
+	if max > len(finalCandidates) {
+		// keep all
+		//
+		// no need to sort through the results and only keep "max"
+		// we're going to keep them all anyway
+		for _, backup := range finalCandidates {
+			backup.keep = true
+		}
+
+		return
+	}
+
+	sort.Slice(finalCandidates, func(i, j int) bool {
+		return finalCandidates[i].file.ModTime().After(finalCandidates[j].file.ModTime())
+	})
+
+	for i := 0; i < max; i++ {
+		finalCandidates[i].keep = true
 	}
 }
